@@ -1,68 +1,33 @@
-# obsigna + sbx demos
+# Obsigna examples
 
-Run an AI coding agent inside a Docker [sbx](https://github.com/docker/sandboxes) microVM and watch two independent audit layers describe the same session from different vantage points:
+Runnable examples of [Obsigna](https://github.com/agent-receipts/obsigna) — cryptographically signed audit trails for AI agents. Each example is self-contained: clone, check the prerequisites, run one script, read the output.
+
+The current examples all tell the same story from one angle — **two independent audit layers for an agent running in a sandbox**:
 
 | Layer | Tool | Question it answers |
 |-------|------|---------------------|
 | Infrastructure | `sbx policy log` | What did the sandbox's network policy **allow or block**? |
-| Agent actions | `obsigna verify` | What did the agent **actually do** — in what order, with what inputs — and is the record intact? |
+| Agent actions | `obsigna verify` | What did the agent **actually do**, in what order, with what inputs — and is the record intact? |
 
-Neither log alone tells the whole story. sbx sees network packets, not tool semantics. [Obsigna](https://github.com/agent-receipts/obsigna) sees a cryptographically signed receipt for every tool call, not network verdicts. Side by side, they show the difference between *what was permitted* and *what happened*.
+Neither log alone tells the whole story. The sandbox sees network packets, not tool semantics. Obsigna sees a signed receipt for every tool call, not network verdicts. Side by side, they show the difference between *what was permitted* and *what happened*.
 
-## The demos
+## Examples
 
-Each demo tells that same two-layer story for a different **receipt capture mechanism** — the three ways obsigna can observe an agent:
-
-| Demo | Captures | How |
-|------|----------|-----|
-| [`opencode-plugin/`](./opencode-plugin) | opencode's **native** tool calls (write, bash, edit) | in-process plugin, installed from npm |
-| [`mcp-proxy/`](./mcp-proxy) | **MCP** tool calls | `obsigna-mcp` sits in the agent→server data path (adversary-resistant) |
-
-They share the same host-side scaffolding ([`lib/common.sh`](./lib/common.sh)): a signing daemon on the host, a socat tunnel into the sandbox, the sbx network policy, and the side-by-side result display.
+| Example | Agent | Sandbox | Captures receipts via | Status |
+|---------|-------|---------|----------------------|--------|
+| [`opencode-plugin/`](./opencode-plugin) | opencode | Docker sbx | the obsigna opencode **plugin** (native tool calls) | ✅ validated |
+| [`mcp-proxy/`](./mcp-proxy) | opencode | Docker sbx | **obsigna-mcp** in the tool data path (MCP calls) | ✅ validated |
 
 ```sh
-git clone https://github.com/agent-receipts/demo-opencode-sbx
-cd demo-opencode-sbx
-./opencode-plugin/demo.sh      # native tool receipts
-./mcp-proxy/demo.sh            # MCP tool receipts
+git clone https://github.com/agent-receipts/obsigna-examples
+cd obsigna-examples
+./opencode-plugin/demo.sh      # receipts for opencode's native tools
+./mcp-proxy/demo.sh            # receipts for MCP tool calls
 ```
 
-## Prerequisites
+Each example has its own README with prerequisites and a walkthrough.
 
-- [**obsigna**](https://github.com/agent-receipts/obsigna#install) — `obsigna` and `obsigna-daemon` on your `PATH`
-- [**sbx**](https://github.com/docker/sandboxes) — authenticated (`sbx login`)
-- [**ollama**](https://ollama.com) — running locally, with `devstral-small-2` pulled (`ollama pull devstral-small-2`)
-- **socat** — `brew install socat`
-
-Each demo creates a `devstral-demo` model variant (32K context window) on first run. Override the model per demo: `./opencode-plugin/demo.sh openai-compatible/qwen2.5-coder:32b`.
-
-## What you'll see
-
-The agent does some work, then attempts an outbound network call the sandbox blocks. Both layers record the moment:
-
-**`sbx policy log`** — the infrastructure view:
-```
-ALLOWED  localhost:11434        ollama (model inference)
-ALLOWED  localhost:3923         obsigna receipt tunnel
-BLOCKED  worldtimeapi.org:443   default deny — no matching allow rule
-```
-
-**`obsigna receipt list`** — the agent-action view:
-```
-SEQ  TIMESTAMP             CHAIN       TOOL / ACTION TYPE
-1    2026-06-16T00:24:16Z  2026-06-16  write
-2    2026-06-16T00:24:18Z  2026-06-16  bash
-3    2026-06-16T00:24:21Z  2026-06-16  bash    ← blocked curl, still receipted
-```
-
-**`obsigna verify`** — chain integrity:
-```
-Chain 2026-06-16: VALID (3 receipts)
-```
-
-The blocked call appears in **both** logs: sbx stopped it at the network layer, obsigna receipted the agent's attempt. Same event, two perspectives.
-
-## How it works
+## How the sbx examples work
 
 ```
 your laptop (host)
@@ -79,27 +44,53 @@ your laptop (host)
       └── ollama via host.docker.internal:11434
 ```
 
-The signing daemon runs on the **host** — the Ed25519 signing key never enters the VM. Receipts are signed and stored on the host. Even if the agent were fully compromised, it cannot forge or delete the receipt chain.
+The signing daemon runs on the **host** — the key never enters the VM. Receipts are signed and stored on the host, so even a fully compromised agent can't forge or delete the chain. The socat tunnel exists because, on macOS, a host Unix socket is visible inside a Linux container via bind-mount but not connectable (the kernels differ); bridging through TCP keeps the daemon — and the key — on the host.
 
-The socat tunnel exists because, on macOS, a host Unix socket is visible inside a Linux container via bind-mount but not connectable (the kernels differ). Bridging through TCP keeps the daemon — and the key — on the host.
+All of this host-side plumbing lives in [`lib/sbx.sh`](./lib/sbx.sh), so an sbx example's `demo.sh` is just: its config, its agent task, and the calls into that library.
 
-## Layout
+## Prerequisites (sbx examples)
 
-```
-demo-opencode-sbx/
-├── lib/common.sh           shared host-side scaffolding
-├── opencode-plugin/
-│   ├── demo.sh
-│   └── opencode.json       declares the obsigna plugin (installed from npm)
-├── mcp-proxy/
-│   ├── demo.sh
-│   └── opencode.json       declares obsigna-mcp wrapping a filesystem MCP server
-└── README.md
-```
+- [**obsigna**](https://github.com/agent-receipts/obsigna#install) — `obsigna` and `obsigna-daemon` on your `PATH`
+- [**sbx**](https://github.com/docker/sandboxes) — authenticated (`sbx login`)
+- [**ollama**](https://ollama.com) — running locally, `devstral-small-2` pulled (`ollama pull devstral-small-2`)
+- **socat** — `brew install socat`
+
+Each example creates a `devstral-demo` model variant (32K context) on first run, and accepts a model override: `./opencode-plugin/demo.sh openai-compatible/qwen2.5-coder:32b`.
+
+## Adding an example
+
+1. Create a directory: `my-example/`.
+2. Add a `demo.sh`. To reuse the sbx scaffolding:
+   ```sh
+   #!/usr/bin/env bash
+   set -euo pipefail
+   DEMO_DIR="$(cd "$(dirname "$0")" && pwd)"
+   # shellcheck source=../lib/sbx.sh disable=SC1091
+   . "$DEMO_DIR/../lib/sbx.sh"
+
+   ar_preflight                     # checks deps, sbx auth, ollama, devstral-demo
+   ar_reset_workspace               # clean /tmp/obsigna-sbx (wipes stale config)
+   cp "$DEMO_DIR/opencode.json" "$WORKSPACE/.opencode/opencode.json"
+   ar_ensure_key
+   ar_start_daemon                  # daemon on the host
+   ar_start_tunnel                  # socat TCP bridge
+   ar_allow_network                 # ollama + tunnel (add "host:port" args for more)
+   ar_create_sandbox
+
+   TUNNEL="$(ar_container_tunnel_cmd)"   # container-side socat snippet
+   sbx exec "$SANDBOX_NAME" -- sh -c "$TUNNEL AGENTRECEIPTS_SOCKET='$CONTAINER_SOCKET' ... <run the agent>"
+
+   ar_show_results                  # sbx policy log + obsigna receipt list + verify
+   ```
+   An example that doesn't use sbx just doesn't source `lib/sbx.sh` — it's a plain script in its own directory.
+3. Add a `README.md` in the directory (prerequisites + what it shows).
+4. Add a row to the table above.
+
+See [`lib/sbx.sh`](./lib/sbx.sh) for the full list of `ar_*` helpers and what each does.
 
 ## Learn more
 
-- [Obsigna](https://github.com/agent-receipts/obsigna) — the signed-receipt protocol and tooling
+- [Obsigna](https://github.com/agent-receipts/obsigna) — the protocol and tooling
 - [opencode plugin](https://github.com/agent-receipts/obsigna/tree/main/integrations/opencode-plugin)
 - [MCP proxy](https://github.com/agent-receipts/obsigna/tree/main/mcp-proxy)
 - [Docker sbx](https://github.com/docker/sandboxes)

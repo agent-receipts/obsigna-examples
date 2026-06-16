@@ -22,8 +22,8 @@
 set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=../lib/common.sh disable=SC1091
-. "$DEMO_DIR/../lib/common.sh"
+# shellcheck source=../lib/sbx.sh disable=SC1091
+. "$DEMO_DIR/../lib/sbx.sh"
 
 MODEL="${1:-openai-compatible/devstral-demo:latest}"
 

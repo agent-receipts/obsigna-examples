@@ -1,8 +1,9 @@
-# common.sh — shared scaffolding for the obsigna + sbx demos.
+# sbx.sh — shared scaffolding for the Docker-sbx examples.
 #
-# Source this from a demo.sh. It provides the host-side plumbing that every
-# demo needs: the signing daemon, the socat TCP tunnel into the sandbox, the
-# sbx network policy, sandbox lifecycle, and the side-by-side result display.
+# Source this from an example's demo.sh. It provides the host-side plumbing that
+# every sbx example needs: the signing daemon, the socat TCP tunnel into the
+# sandbox, the sbx network policy, sandbox lifecycle, and the side-by-side
+# result display. Examples that don't use sbx simply don't source this.
 #
 # A demo script is expected to:
 #   1. source this file
