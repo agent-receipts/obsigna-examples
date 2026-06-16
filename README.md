@@ -68,25 +68,25 @@ Each example creates a `devstral-demo` model variant (32K context) on first run,
    # shellcheck source=../lib/sbx.sh disable=SC1091
    . "$DEMO_DIR/../lib/sbx.sh"
 
-   ar_preflight                     # checks deps, sbx auth, ollama, devstral-demo
-   ar_reset_workspace               # clean /tmp/obsigna-sbx (wipes stale config)
+   ob_preflight                     # checks deps, sbx auth, ollama, devstral-demo
+   ob_reset_workspace               # clean /tmp/obsigna-sbx (wipes stale config)
    cp "$DEMO_DIR/opencode.json" "$WORKSPACE/.opencode/opencode.json"
-   ar_ensure_key
-   ar_start_daemon                  # daemon on the host
-   ar_start_tunnel                  # socat TCP bridge
-   ar_allow_network                 # ollama + tunnel (add "host:port" args for more)
-   ar_create_sandbox
+   ob_ensure_key
+   ob_start_daemon                  # daemon on the host
+   ob_start_tunnel                  # socat TCP bridge
+   ob_allow_network                 # ollama + tunnel (add "host:port" args for more)
+   ob_create_sandbox
 
-   TUNNEL="$(ar_container_tunnel_cmd)"   # container-side socat snippet
+   TUNNEL="$(ob_container_tunnel_cmd)"   # container-side socat snippet
    sbx exec "$SANDBOX_NAME" -- sh -c "$TUNNEL AGENTRECEIPTS_SOCKET='$CONTAINER_SOCKET' ... <run the agent>"
 
-   ar_show_results                  # sbx policy log + obsigna receipt list + verify
+   ob_show_results                  # sbx policy log + obsigna receipt list + verify
    ```
    An example that doesn't use sbx just doesn't source `lib/sbx.sh` — it's a plain script in its own directory.
 3. Add a `README.md` in the directory (prerequisites + what it shows).
 4. Add a row to the table above.
 
-See [`lib/sbx.sh`](./lib/sbx.sh) for the full list of `ar_*` helpers and what each does.
+See [`lib/sbx.sh`](./lib/sbx.sh) for the full list of `ob_*` helpers and what each does.
 
 ## Learn more
 

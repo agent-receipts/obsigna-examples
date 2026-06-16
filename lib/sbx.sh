@@ -7,11 +7,11 @@
 #
 # A demo script is expected to:
 #   1. source this file
-#   2. call ar_preflight (optionally with extra required commands)
+#   2. call ob_preflight (optionally with extra required commands)
 #   3. populate "$WORKSPACE/.opencode/" with its own config
-#   4. call ar_start_daemon, ar_start_tunnel, ar_allow_network, ar_create_sandbox
+#   4. call ob_start_daemon, ob_start_tunnel, ob_allow_network, ob_create_sandbox
 #   5. run its agent via `sbx exec`
-#   6. call ar_show_results
+#   6. call ob_show_results
 #
 # shellcheck shell=bash
 
@@ -34,18 +34,18 @@ NC=$'\033[0m'
 DAEMON_PID=""
 SOCAT_PID=""
 
-ar_cleanup() {
+ob_cleanup() {
   [ -n "$SOCAT_PID" ] && kill "$SOCAT_PID" 2>/dev/null || true
   [ -n "$DAEMON_PID" ] && kill "$DAEMON_PID" 2>/dev/null || true
   sbx rm -f "$SANDBOX_NAME" 2>/dev/null || true
   rm -f "$SOCKET_PATH"
 }
-trap ar_cleanup EXIT
+trap ob_cleanup EXIT
 
-# ar_preflight [extra-cmd ...]
+# ob_preflight [extra-cmd ...]
 # Verifies required commands, sbx auth, ollama, and creates the devstral-demo
 # model variant (32K context) if missing. Exits non-zero on any failure.
-ar_preflight() {
+ob_preflight() {
   local missing=0 cmd
   for cmd in obsigna-daemon obsigna sbx socat "$@"; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "${RED}missing: $cmd${NC}"; missing=1; }
@@ -70,26 +70,26 @@ EOF
   [ "$missing" -eq 0 ] || { echo "Fix the above and re-run."; exit 1; }
 }
 
-# ar_reset_workspace — fresh runtime workspace under a short path so the daemon
+# ob_reset_workspace — fresh runtime workspace under a short path so the daemon
 # socket stays within macOS's 103-byte AF_UNIX sun_path limit. Clears .opencode
 # and work so a stale config or plugin from another demo can't leak in (opencode
 # auto-loads plugins from .opencode/plugins/, which would double-count receipts).
 # The cached bin/ and signing key at the workspace root are preserved.
-ar_reset_workspace() {
+ob_reset_workspace() {
   rm -rf "$WORKSPACE/.opencode" "$WORKSPACE/work"
   mkdir -p "$WORKSPACE/.opencode" "$WORKSPACE/work"
 }
 
-ar_ensure_key() {
+ob_ensure_key() {
   if [ ! -f "$KEY_PATH" ]; then
     echo "${BLUE}==> Generating signing key...${NC}"
     obsigna keys generate --key "$KEY_PATH"
   fi
 }
 
-# ar_start_daemon — obsigna-daemon on the host. The signing key never enters
+# ob_start_daemon — obsigna-daemon on the host. The signing key never enters
 # the VM.
-ar_start_daemon() {
+ob_start_daemon() {
   rm -f "$SOCKET_PATH" "$DB_PATH"
   echo "${BLUE}==> Starting obsigna-daemon on host (outside the VM)...${NC}"
   obsigna-daemon \
@@ -110,10 +110,10 @@ ar_start_daemon() {
   echo "   daemon PID=$DAEMON_PID  socket=$(basename "$SOCKET_PATH")"
 }
 
-# ar_start_tunnel — host-side socat bridge. On macOS a host Unix socket is
+# ob_start_tunnel — host-side socat bridge. On macOS a host Unix socket is
 # visible inside a Linux container via bind-mount but not connectable, so we
 # bridge through TCP and keep the daemon (and key) on the host.
-ar_start_tunnel() {
+ob_start_tunnel() {
   echo "${BLUE}==> Starting socat TCP bridge (host.docker.internal:$TCP_PORT → daemon)...${NC}"
   socat TCP4-LISTEN:"$TCP_PORT",fork,reuseaddr UNIX-CONNECT:"$SOCKET_PATH" &
   SOCAT_PID=$!
@@ -121,10 +121,10 @@ ar_start_tunnel() {
   echo "   socat PID=$SOCAT_PID  port=$TCP_PORT"
 }
 
-# ar_allow_network [host:port ...] — allow ollama, the obsigna tunnel, and any
+# ob_allow_network [host:port ...] — allow ollama, the obsigna tunnel, and any
 # extra host:port pairs. host.docker.internal resolves to fe80::1 inside sbx,
 # which sbx classifies as localhost.
-ar_allow_network() {
+ob_allow_network() {
   echo "${BLUE}==> Configuring sbx network policy...${NC}"
   sbx policy allow network localhost:11434 2>/dev/null || true
   sbx policy allow network localhost:"$TCP_PORT" 2>/dev/null || true
@@ -134,22 +134,22 @@ ar_allow_network() {
   done
 }
 
-ar_create_sandbox() {
+ob_create_sandbox() {
   sbx rm -f "$SANDBOX_NAME" 2>/dev/null || true
   echo "${BLUE}==> Creating sbx sandbox...${NC}"
   sbx create opencode "$WORKSPACE" --name "$SANDBOX_NAME" --quiet
 }
 
-# ar_container_tunnel_cmd — shell snippet (for use inside `sbx exec`) that
+# ob_container_tunnel_cmd — shell snippet (for use inside `sbx exec`) that
 # stands up the container-side socat: a Linux Unix socket tunnelled back to the
 # host daemon over TCP. Echoes the snippet; callers prepend it to their command.
-ar_container_tunnel_cmd() {
+ob_container_tunnel_cmd() {
   printf "rm -f %s; socat UNIX-LISTEN:%s,fork,reuseaddr TCP4:host.docker.internal:%s & for i in \$(seq 1 20); do [ -S %s ] && break; sleep 0.25; done;" \
     "$CONTAINER_SOCKET" "$CONTAINER_SOCKET" "$TCP_PORT" "$CONTAINER_SOCKET"
 }
 
-# ar_show_results — the side-by-side payoff: infra view vs agent-action view.
-ar_show_results() {
+# ob_show_results — the side-by-side payoff: infra view vs agent-action view.
+ob_show_results() {
   echo
   echo "${BOLD}══════════════════════════════════════════════════════════════${NC}"
   echo "${YELLOW}${BOLD}  sbx policy log — what the infrastructure allowed / blocked${NC}"

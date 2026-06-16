@@ -34,8 +34,8 @@ OBSIGNA_VERSION="${OBSIGNA_VERSION:-0.26.0}"
 echo "${BOLD}obsigna + sbx demo — MCP proxy (Tier A)${NC}"
 echo
 
-ar_preflight
-ar_reset_workspace
+ob_preflight
+ob_reset_workspace
 cp "$DEMO_DIR/opencode.json" "$WORKSPACE/.opencode/opencode.json"
 
 # ── fetch the Linux obsigna-mcp binary into the bind-mounted workspace ─────────
@@ -60,12 +60,12 @@ if [ ! -x "$BIN_DIR/obsigna-mcp" ]; then
   echo "   → $BIN_DIR/obsigna-mcp"
 fi
 
-ar_ensure_key
-ar_start_daemon
-ar_start_tunnel
+ob_ensure_key
+ob_start_daemon
+ob_start_tunnel
 # npx pulls the filesystem MCP server from npm on first launch inside the VM.
-ar_allow_network registry.npmjs.org:443
-ar_create_sandbox
+ob_allow_network registry.npmjs.org:443
+ob_create_sandbox
 
 # Steer the model to the MCP server's tools (not opencode's native write/read),
 # since only calls that pass through obsigna-mcp get receipted.
@@ -79,8 +79,8 @@ echo "${BLUE}==> Running opencode agent inside sbx (model: $MODEL)...${NC}"
 echo "${YELLOW}    Task: drive the filesystem MCP server through the obsigna-mcp proxy${NC}"
 echo
 
-TUNNEL="$(ar_container_tunnel_cmd)"
+TUNNEL="$(ob_container_tunnel_cmd)"
 sbx exec "$SANDBOX_NAME" -- \
   sh -c "$TUNNEL AGENTRECEIPTS_SOCKET='$CONTAINER_SOCKET' OPENCODE_CONFIG_DIR='$WORKSPACE/.opencode' opencode run --model '$MODEL' '$TASK'"
 
-ar_show_results
+ob_show_results

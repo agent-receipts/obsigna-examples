@@ -21,14 +21,14 @@ MODEL="${1:-openai-compatible/devstral-demo:latest}"
 echo "${BOLD}obsigna + sbx demo — opencode plugin${NC}"
 echo
 
-ar_preflight
-ar_reset_workspace
+ob_preflight
+ob_reset_workspace
 cp "$DEMO_DIR/opencode.json" "$WORKSPACE/.opencode/opencode.json"
-ar_ensure_key
-ar_start_daemon
-ar_start_tunnel
-ar_allow_network
-ar_create_sandbox
+ob_ensure_key
+ob_start_daemon
+ob_start_tunnel
+ob_allow_network
+ob_create_sandbox
 
 TASK="Complete these steps in order without asking questions:
 1. Write a Python script to work/fibonacci.py that prints the first 10 Fibonacci numbers (no user input, hardcoded to 10).
@@ -39,8 +39,8 @@ echo "${BLUE}==> Running opencode agent inside sbx (model: $MODEL)...${NC}"
 echo "${YELLOW}    Task: write fibonacci.py → run it → attempt outbound network call${NC}"
 echo
 
-TUNNEL="$(ar_container_tunnel_cmd)"
+TUNNEL="$(ob_container_tunnel_cmd)"
 sbx exec "$SANDBOX_NAME" -- \
   sh -c "$TUNNEL AGENTRECEIPTS_SOCKET='$CONTAINER_SOCKET' OPENCODE_CONFIG_DIR='$WORKSPACE/.opencode' opencode run --model '$MODEL' '$TASK'"
 
-ar_show_results
+ob_show_results
