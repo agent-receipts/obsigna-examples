@@ -33,11 +33,20 @@ NC=$'\033[0m'
 
 DAEMON_PID=""
 SOCAT_PID=""
+# Extra sandboxes created by multi-agent demos (see ob_create_named_sandbox).
+# Single-sandbox demos leave this empty and rely on SANDBOX_NAME alone.
+OB_SANDBOXES=()
 
 ob_cleanup() {
   [ -n "$SOCAT_PID" ] && kill "$SOCAT_PID" 2>/dev/null || true
   [ -n "$DAEMON_PID" ] && kill "$DAEMON_PID" 2>/dev/null || true
   sbx rm -f "$SANDBOX_NAME" 2>/dev/null || true
+  if [ "${#OB_SANDBOXES[@]}" -gt 0 ]; then
+    local _sb
+    for _sb in "${OB_SANDBOXES[@]}"; do
+      sbx rm -f "$_sb" 2>/dev/null || true
+    done
+  fi
   rm -f "$SOCKET_PATH"
 }
 trap ob_cleanup EXIT
@@ -138,6 +147,18 @@ ob_create_sandbox() {
   sbx rm -f "$SANDBOX_NAME" 2>/dev/null || true
   echo "${BLUE}==> Creating sbx sandbox...${NC}"
   sbx create opencode "$WORKSPACE" --name "$SANDBOX_NAME" --quiet
+}
+
+# ob_create_named_sandbox NAME — create one opencode sandbox bind-mounting the
+# shared $WORKSPACE under NAME, and register it for cleanup. Multi-agent demos
+# call this once per agent: every sandbox mounts the SAME host workspace, so its
+# work/ subdir is the shared state the isolated agents contend over.
+ob_create_named_sandbox() {
+  local name="$1"
+  sbx rm -f "$name" 2>/dev/null || true
+  echo "${BLUE}==> Creating sbx sandbox: ${name}...${NC}"
+  sbx create opencode "$WORKSPACE" --name "$name" --quiet
+  OB_SANDBOXES+=("$name")
 }
 
 # ob_container_tunnel_cmd — shell snippet (for use inside `sbx exec`) that

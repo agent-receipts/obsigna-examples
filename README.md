@@ -2,7 +2,7 @@
 
 Runnable examples of [Obsigna](https://github.com/agent-receipts/obsigna) — cryptographically signed audit trails for AI agents. Each example is self-contained: clone, check the prerequisites, run one script, read the output.
 
-The current examples all tell the same story from one angle — **two independent audit layers for an agent running in a sandbox**:
+Two of the examples tell the same story from one angle — **two independent audit layers for an agent running in a sandbox**:
 
 | Layer | Tool | Question it answers |
 |-------|------|---------------------|
@@ -11,18 +11,22 @@ The current examples all tell the same story from one angle — **two independen
 
 Neither log alone tells the whole story. The sandbox sees network packets, not tool semantics. Obsigna sees a signed receipt for every tool call, not network verdicts. Side by side, they show the difference between *what was permitted* and *what happened*.
 
+The third turns the lens on a problem sandboxing **can't** solve: when several isolated agents edit the same shared file, who changed what? Obsigna attributes every mutation to the agent that made it, in one signed chain.
+
 ## Examples
 
 | Example | Agent | Sandbox | Captures receipts via | Status |
 |---------|-------|---------|----------------------|--------|
 | [`opencode-plugin/`](./opencode-plugin) | opencode | Docker sbx | the obsigna opencode **plugin** (native tool calls) | ✅ validated |
 | [`mcp-proxy/`](./mcp-proxy) | opencode | Docker sbx | **obsigna-mcp** in the tool data path (MCP calls) | ✅ validated |
+| [`multi-agent-attribution/`](./multi-agent-attribution) | 2× opencode | Docker sbx (one per agent) | **obsigna-mcp** with a per-agent operator identity | ✅ validated |
 
 ```sh
 git clone https://github.com/agent-receipts/obsigna-examples
 cd obsigna-examples
-./opencode-plugin/demo.sh      # receipts for opencode's native tools
-./mcp-proxy/demo.sh            # receipts for MCP tool calls
+./opencode-plugin/demo.sh           # receipts for opencode's native tools
+./mcp-proxy/demo.sh                 # receipts for MCP tool calls
+./multi-agent-attribution/demo.sh   # who changed the shared file?
 ```
 
 Each example has its own README with prerequisites and a walkthrough.
