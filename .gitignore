@@ -1,0 +1,7 @@
+# Runtime artifacts (the demo writes these under /tmp/obsigna-sbx, but guard anyway)
+*.sock
+*.db
+*.db-shm
+*.db-wal
+signing.key
+signing.key.pub
