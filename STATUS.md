@@ -4,9 +4,15 @@ Validation state of each demo. Remove this file before the repo goes public.
 
 ## opencode-plugin/
 
-- **Logic validated** end-to-end against a locally-built plugin (obsigna monorepo PR #766): plugin loads, native tool calls intercepted, receipts signed by the host daemon, chain VALID.
-- **Blocked on**: `@agent-receipts/opencode-plugin` being published to npm. `opencode.json` declares the package by name; opencode installs it on first run. Until it's on npm, this demo can't run from a clean clone.
-- Confirm the final published package name matches `opencode-plugin/opencode.json`.
+- **Validated end-to-end against the published npm package**
+  `@obsigna/opencode-plugin@0.1.0-alpha.3`. opencode installs it on first run,
+  the plugin loads cleanly, native tool calls (write/bash) are receipted by the
+  host daemon, chain VALID. No build step.
+- Getting here required three fixes in the published package (alpha.2 was not
+  loadable): a `./server` entrypoint + `main`, an entry that exports only the
+  plugin, and importing `DaemonEmitter` from the new `@obsigna/sdk-ts/emitter`
+  subpath (0.14.1, #867) so `node:sqlite`/`undici` stay out of the import graph.
+- Pinned to `alpha.3` in opencode.json; bump when a non-alpha ships.
 
 ## mcp-proxy/
 

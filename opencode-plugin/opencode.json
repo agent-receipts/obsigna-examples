@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@agent-receipts/opencode-plugin"],
+  "plugin": ["@obsigna/opencode-plugin@0.1.0-alpha.3"],
   "provider": {
     "openai-compatible": {
       "options": {
