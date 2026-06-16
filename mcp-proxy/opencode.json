@@ -7,7 +7,7 @@
         "/tmp/obsigna-sbx/bin/obsigna-mcp",
         "--socket", "/tmp/obsigna.sock",
         "--name", "files",
-        "npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/agent/workspace/work"
+        "npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp/obsigna-sbx/work"
       ],
       "environment": {
         "AGENTRECEIPTS_SOCKET": "/tmp/obsigna.sock"

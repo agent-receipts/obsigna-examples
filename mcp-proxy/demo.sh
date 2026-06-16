@@ -69,10 +69,11 @@ ar_create_sandbox
 
 # Steer the model to the MCP server's tools (not opencode's native write/read),
 # since only calls that pass through obsigna-mcp get receipted.
-TASK="Use the 'files' MCP server tools (not the built-in write/read tools) to do the following, in order, without asking questions:
-1. Write a file named greeting.txt containing the text 'Hello from MCP' using the files MCP server.
-2. Read greeting.txt back using the files MCP server and show its contents.
-3. List the directory using the files MCP server."
+TASK="Use ONLY the files_ MCP server tools (not the built-in write/read tools). Every tool takes a parameter named exactly 'path' (an absolute path). Do these steps in order, once each, without asking questions:
+1. files_write_file with path='/tmp/obsigna-sbx/work/greeting.txt' and content='Hello from MCP'.
+2. files_read_text_file with path='/tmp/obsigna-sbx/work/greeting.txt' and show the contents.
+3. files_list_directory with path='/tmp/obsigna-sbx/work'.
+Then stop."
 
 echo "${BLUE}==> Running opencode agent inside sbx (model: $MODEL)...${NC}"
 echo "${YELLOW}    Task: drive the filesystem MCP server through the obsigna-mcp proxy${NC}"

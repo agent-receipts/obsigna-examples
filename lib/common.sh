@@ -70,8 +70,12 @@ EOF
 }
 
 # ar_reset_workspace — fresh runtime workspace under a short path so the daemon
-# socket stays within macOS's 103-byte AF_UNIX sun_path limit.
+# socket stays within macOS's 103-byte AF_UNIX sun_path limit. Clears .opencode
+# and work so a stale config or plugin from another demo can't leak in (opencode
+# auto-loads plugins from .opencode/plugins/, which would double-count receipts).
+# The cached bin/ and signing key at the workspace root are preserved.
 ar_reset_workspace() {
+  rm -rf "$WORKSPACE/.opencode" "$WORKSPACE/work"
   mkdir -p "$WORKSPACE/.opencode" "$WORKSPACE/work"
 }
 
