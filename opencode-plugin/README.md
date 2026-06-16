@@ -37,7 +37,7 @@ SEQ  TIMESTAMP             CHAIN       TOOL / ACTION TYPE
 
 ## Notes
 
-- Pinned to `@obsigna/opencode-plugin@0.1.0-alpha.3` in `opencode.json`. Bump when
+- Pinned to `@obsigna/opencode-plugin@0.1.0` in `opencode.json`. Bump when
   a newer version ships.
 - A local model occasionally fumbles shell quoting and retries the curl a few
   times; each attempt is faithfully receipted.
