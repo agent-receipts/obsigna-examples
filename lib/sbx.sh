@@ -48,6 +48,8 @@ ob_cleanup() {
     done
   fi
   rm -f "$SOCKET_PATH"
+  [ -n "${OB_ANCHOR_DIR:-}" ] && rm -rf "$OB_ANCHOR_DIR"
+  return 0
 }
 trap ob_cleanup EXIT
 
@@ -98,17 +100,36 @@ ob_ensure_key() {
 
 # ob_start_daemon — obsigna-daemon on the host. The signing key never enters
 # the VM.
+#
+# Optional, env-gated (off by default, so other examples are unaffected):
+#   OB_CHECKPOINT_ANCHOR   sink spec passed to --checkpoint-anchor
+#                          (e.g. git:/tmp/obsigna-anchor). When set, the daemon
+#                          emits out-of-band signed checkpoints (ADR-0008). Put
+#                          the sink OUTSIDE $WORKSPACE — $WORKSPACE is bind-mounted
+#                          into the sandbox, so an anchor under it would be
+#                          writable by the agent and the boundary would be a lie.
+#   OB_CHECKPOINT_CADENCE  receipts between checkpoints (default 1 = every receipt).
+#   OB_ANCHOR_DIR          host dir for the sink; reset on start, removed on cleanup.
 ob_start_daemon() {
   rm -f "$SOCKET_PATH" "$DB_PATH"
   echo "${BLUE}==> Starting obsigna-daemon on host (outside the VM)...${NC}"
-  obsigna-daemon \
-    --socket "$SOCKET_PATH" \
-    --db "$DB_PATH" \
-    --key "$KEY_PATH" \
-    --issuer-id "did:user:${USER}@local" \
-    --chain-id "$CHAIN_ID" \
-    --unsafe-socket-path \
-    2>/dev/null &
+  # Build the arg list as a (never-empty) array so adding the optional
+  # checkpoint flags stays safe under `set -u` even on macOS's bash 3.2.
+  local args=(
+    --socket "$SOCKET_PATH"
+    --db "$DB_PATH"
+    --key "$KEY_PATH"
+    --issuer-id "did:user:${USER}@local"
+    --chain-id "$CHAIN_ID"
+    --unsafe-socket-path
+  )
+  if [ -n "${OB_CHECKPOINT_ANCHOR:-}" ]; then
+    [ -n "${OB_ANCHOR_DIR:-}" ] && rm -rf "$OB_ANCHOR_DIR"
+    args+=(--checkpoint-anchor "$OB_CHECKPOINT_ANCHOR")
+    args+=(--checkpoint-cadence "${OB_CHECKPOINT_CADENCE:-1}")
+    echo "   checkpoint anchor: $OB_CHECKPOINT_ANCHOR (cadence ${OB_CHECKPOINT_CADENCE:-1}, on host, outside the mount)"
+  fi
+  obsigna-daemon "${args[@]}" 2>/dev/null &
   DAEMON_PID=$!
   local _
   for _ in $(seq 1 40); do

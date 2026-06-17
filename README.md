@@ -13,6 +13,8 @@ Neither log alone tells the whole story. The sandbox sees network packets, not t
 
 The third turns the lens on a problem sandboxing **can't** solve: when several isolated agents edit the same shared file, who changed what? Obsigna attributes every mutation to the agent that made it, in one signed chain.
 
+The fourth answers the question that makes a signed log trustworthy in the first place: what if an attacker **deletes the tail** of the receipt store? A hash chain is tamper-evident, but a shorter chain still verifies clean. An out-of-band signed checkpoint anchor — on a trust domain the agent can't reach — catches the truncation that `verify` alone cannot.
+
 ## Examples
 
 | Example | Agent | Sandbox | Captures receipts via | Status |
@@ -20,6 +22,7 @@ The third turns the lens on a problem sandboxing **can't** solve: when several i
 | [`opencode-plugin/`](./opencode-plugin) | opencode | Docker sbx | the obsigna opencode **plugin** (native tool calls) | ✅ validated |
 | [`mcp-proxy/`](./mcp-proxy) | opencode | Docker sbx | **obsigna-mcp** in the tool data path (MCP calls) | ✅ validated |
 | [`multi-agent-attribution/`](./multi-agent-attribution) | 2× opencode | Docker sbx (one per agent) | **obsigna-mcp** with a per-agent operator identity | ✅ validated |
+| [`checkpoint-anchor/`](./checkpoint-anchor) | opencode | Docker sbx | the obsigna **plugin** + an out-of-band **checkpoint anchor** | ✅ validated |
 
 ```sh
 git clone https://github.com/agent-receipts/obsigna-examples
@@ -27,6 +30,7 @@ cd obsigna-examples
 ./opencode-plugin/demo.sh           # receipts for opencode's native tools
 ./mcp-proxy/demo.sh                 # receipts for MCP tool calls
 ./multi-agent-attribution/demo.sh   # who changed the shared file?
+./checkpoint-anchor/demo.sh         # truncate the store tail → verify goes red
 ```
 
 Each example has its own README with prerequisites and a walkthrough.
