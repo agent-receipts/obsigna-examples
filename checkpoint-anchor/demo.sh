@@ -49,7 +49,7 @@ echo "${BOLD}obsigna + sbx demo — tail-truncation resistance (checkpoint ancho
 echo "${YELLOW}A real opencode session, an out-of-band anchor, and a truncation that goes red.${NC}"
 echo
 
-ob_preflight python3
+ob_preflight python3 git
 ob_reset_workspace
 cp "$DEMO_DIR/opencode.json" "$WORKSPACE/.opencode/opencode.json"
 ob_ensure_key
@@ -69,8 +69,13 @@ echo "${YELLOW}    Task: write greet.py → run it → write sum.py → run it${
 echo
 
 TUNNEL="$(ob_container_tunnel_cmd)"
+# $TASK contains single quotes (e.g. prints 'hello from the agent'), so it can't
+# be wrapped in single quotes inside the sh -c string — the inner quotes would
+# close early and word-split the prompt. Base64 it (alnum + / =, shell-safe) and
+# decode in the container, where the decoded text is passed as one quoted arg.
+TASK_B64="$(printf '%s' "$TASK" | base64 | tr -d '\n')"
 sbx exec "$SANDBOX_NAME" -- \
-  sh -c "$TUNNEL AGENTRECEIPTS_SOCKET='$CONTAINER_SOCKET' OPENCODE_CONFIG_DIR='$WORKSPACE/.opencode' opencode run --model '$MODEL' '$TASK'"
+  sh -c "$TUNNEL AGENTRECEIPTS_SOCKET='$CONTAINER_SOCKET' OPENCODE_CONFIG_DIR='$WORKSPACE/.opencode' opencode run --model '$MODEL' \"\$(printf %s '$TASK_B64' | base64 -d)\""
 
 sleep 0.5
 
@@ -135,10 +140,15 @@ echo
 echo "${BOLD}══════════════════════════════════════════════════════════════${NC}"
 echo "${GREEN}${BOLD}  3. Before the attack — store and anchor agree${NC}"
 echo "${BOLD}══════════════════════════════════════════════════════════════${NC}"
+# This is the green baseline the whole demo rests on: if either check is RED
+# before any attack, the setup is invalid and the truncation story is meaningless.
+# Abort explicitly (the script runs without `set -e`).
 echo "${BOLD}plain verify:${NC}"
-obsigna verify --db "$DB_PATH" --public-key "${KEY_PATH}.pub" --chain-id "$CHAIN_ID"
+obsigna verify --db "$DB_PATH" --public-key "${KEY_PATH}.pub" --chain-id "$CHAIN_ID" \
+  || { echo "${RED}baseline plain verify failed — invalid setup, aborting${NC}"; exit 1; }
 echo "${BOLD}verify --against-anchor:${NC}"
-obsigna verify --db "$DB_PATH" --public-key "${KEY_PATH}.pub" --chain-id "$CHAIN_ID" --against-anchor "$ANCHOR_LOG"
+obsigna verify --db "$DB_PATH" --public-key "${KEY_PATH}.pub" --chain-id "$CHAIN_ID" --against-anchor "$ANCHOR_LOG" \
+  || { echo "${RED}baseline anchor verify failed — invalid setup, aborting${NC}"; exit 1; }
 
 # ── 4. the attack: truncate the store tail ────────────────────────────────────
 echo

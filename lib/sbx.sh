@@ -37,6 +37,17 @@ SOCAT_PID=""
 # Single-sandbox demos leave this empty and rely on SANDBOX_NAME alone.
 OB_SANDBOXES=()
 
+# ob_rm_anchor_dir — rm -rf the checkpoint anchor dir, but ONLY when it sits under
+# the demo's /tmp/obsigna-* prefix. OB_ANCHOR_DIR is env-supplied; a typo (empty,
+# '/', '$HOME', '.') must never let an `rm -rf` reach unintended host data.
+ob_rm_anchor_dir() {
+  case "${OB_ANCHOR_DIR:-}" in
+    "") return 0 ;;
+    /tmp/obsigna-*) rm -rf "$OB_ANCHOR_DIR" ;;
+    *) echo "${YELLOW}refusing to rm OB_ANCHOR_DIR outside /tmp/obsigna-*: ${OB_ANCHOR_DIR}${NC}" >&2 ;;
+  esac
+}
+
 ob_cleanup() {
   [ -n "$SOCAT_PID" ] && kill "$SOCAT_PID" 2>/dev/null || true
   [ -n "$DAEMON_PID" ] && kill "$DAEMON_PID" 2>/dev/null || true
@@ -48,7 +59,7 @@ ob_cleanup() {
     done
   fi
   rm -f "$SOCKET_PATH"
-  [ -n "${OB_ANCHOR_DIR:-}" ] && rm -rf "$OB_ANCHOR_DIR"
+  ob_rm_anchor_dir
   return 0
 }
 trap ob_cleanup EXIT
@@ -124,7 +135,7 @@ ob_start_daemon() {
     --unsafe-socket-path
   )
   if [ -n "${OB_CHECKPOINT_ANCHOR:-}" ]; then
-    [ -n "${OB_ANCHOR_DIR:-}" ] && rm -rf "$OB_ANCHOR_DIR"
+    ob_rm_anchor_dir
     args+=(--checkpoint-anchor "$OB_CHECKPOINT_ANCHOR")
     args+=(--checkpoint-cadence "${OB_CHECKPOINT_CADENCE:-1}")
     echo "   checkpoint anchor: $OB_CHECKPOINT_ANCHOR (cadence ${OB_CHECKPOINT_CADENCE:-1}, on host, outside the mount)"

@@ -40,8 +40,13 @@ create the sandbox, run the agent via `sbx exec`, then show results. See the
 
 ## Conventions
 
-- **Bash**, `set -uo pipefail` (no `-e`: a flaky local model shouldn't abort the
-  run). Use `exit 1` explicitly where a real failure must stop the demo.
+- **Bash**, `set -uo pipefail`, plus `-e` only when the demo has its own critical
+  setup that must abort on failure (e.g. `mcp-proxy/` downloads a binary, so it
+  uses `set -euo pipefail`). Demos whose flow continues past a flaky local-model
+  step omit `-e` so that step can't abort the run (`checkpoint-anchor/`,
+  `multi-agent-attribution/`). Either way, use `exit 1` explicitly where a real
+  failure must stop the demo — don't rely on `-e` to catch it. Don't "fix" a
+  file's choice in isolation; match its existing flow.
 - **Support GNU *and* BSD tools.** Demos are authored on macOS (BSD) and run on
   Linux (GNU). Don't assume one. For `stat`, try GNU first then BSD:
   `stat -c '%a' "$d" 2>/dev/null || stat -f '%Lp' "$d" 2>/dev/null || echo '?'`
