@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@obsigna/opencode-plugin@0.1.0"],
+  "provider": {
+    "openai-compatible": {
+      "options": {
+        "baseURL": "http://host.docker.internal:11434/v1",
+        "apiKey": "ollama"
+      },
+      "models": {
+        "devstral-demo:latest": {
+          "name": "Devstral Demo (32K ctx)",
+          "tool_call": true
+        },
+        "qwen2.5-coder:32b": {
+          "name": "Qwen 2.5 Coder 32B",
+          "tool_call": true
+        }
+      }
+    }
+  },
+  "model": "openai-compatible/devstral-demo:latest"
+}

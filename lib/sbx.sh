@@ -37,6 +37,17 @@ SOCAT_PID=""
 # Single-sandbox demos leave this empty and rely on SANDBOX_NAME alone.
 OB_SANDBOXES=()
 
+# ob_rm_anchor_dir — rm -rf the checkpoint anchor dir, but ONLY when it sits under
+# the demo's /tmp/obsigna-* prefix. OB_ANCHOR_DIR is env-supplied; a typo (empty,
+# '/', '$HOME', '.') must never let an `rm -rf` reach unintended host data.
+ob_rm_anchor_dir() {
+  case "${OB_ANCHOR_DIR:-}" in
+    "") return 0 ;;
+    /tmp/obsigna-*) rm -rf "$OB_ANCHOR_DIR" ;;
+    *) echo "${YELLOW}refusing to rm OB_ANCHOR_DIR outside /tmp/obsigna-*: ${OB_ANCHOR_DIR}${NC}" >&2 ;;
+  esac
+}
+
 ob_cleanup() {
   [ -n "$SOCAT_PID" ] && kill "$SOCAT_PID" 2>/dev/null || true
   [ -n "$DAEMON_PID" ] && kill "$DAEMON_PID" 2>/dev/null || true
@@ -48,6 +59,8 @@ ob_cleanup() {
     done
   fi
   rm -f "$SOCKET_PATH"
+  ob_rm_anchor_dir
+  return 0
 }
 trap ob_cleanup EXIT
 
@@ -98,17 +111,36 @@ ob_ensure_key() {
 
 # ob_start_daemon — obsigna-daemon on the host. The signing key never enters
 # the VM.
+#
+# Optional, env-gated (off by default, so other examples are unaffected):
+#   OB_CHECKPOINT_ANCHOR   sink spec passed to --checkpoint-anchor
+#                          (e.g. git:/tmp/obsigna-anchor). When set, the daemon
+#                          emits out-of-band signed checkpoints (ADR-0008). Put
+#                          the sink OUTSIDE $WORKSPACE — $WORKSPACE is bind-mounted
+#                          into the sandbox, so an anchor under it would be
+#                          writable by the agent and the boundary would be a lie.
+#   OB_CHECKPOINT_CADENCE  receipts between checkpoints (default 1 = every receipt).
+#   OB_ANCHOR_DIR          host dir for the sink; reset on start, removed on cleanup.
 ob_start_daemon() {
   rm -f "$SOCKET_PATH" "$DB_PATH"
   echo "${BLUE}==> Starting obsigna-daemon on host (outside the VM)...${NC}"
-  obsigna-daemon \
-    --socket "$SOCKET_PATH" \
-    --db "$DB_PATH" \
-    --key "$KEY_PATH" \
-    --issuer-id "did:user:${USER}@local" \
-    --chain-id "$CHAIN_ID" \
-    --unsafe-socket-path \
-    2>/dev/null &
+  # Build the arg list as a (never-empty) array so adding the optional
+  # checkpoint flags stays safe under `set -u` even on macOS's bash 3.2.
+  local args=(
+    --socket "$SOCKET_PATH"
+    --db "$DB_PATH"
+    --key "$KEY_PATH"
+    --issuer-id "did:user:${USER}@local"
+    --chain-id "$CHAIN_ID"
+    --unsafe-socket-path
+  )
+  if [ -n "${OB_CHECKPOINT_ANCHOR:-}" ]; then
+    ob_rm_anchor_dir
+    args+=(--checkpoint-anchor "$OB_CHECKPOINT_ANCHOR")
+    args+=(--checkpoint-cadence "${OB_CHECKPOINT_CADENCE:-1}")
+    echo "   checkpoint anchor: $OB_CHECKPOINT_ANCHOR (cadence ${OB_CHECKPOINT_CADENCE:-1}, on host, outside the mount)"
+  fi
+  obsigna-daemon "${args[@]}" 2>/dev/null &
   DAEMON_PID=$!
   local _
   for _ in $(seq 1 40); do
