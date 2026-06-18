@@ -20,7 +20,25 @@ SOCKET_PATH="$WORKSPACE/obsigna.sock"
 TCP_PORT=3923
 CONTAINER_SOCKET=/tmp/obsigna.sock
 DB_PATH="$WORKSPACE/receipts.db"
-KEY_PATH="$WORKSPACE/signing.key"
+# Signing key lives OUTSIDE $WORKSPACE. $WORKSPACE is bind-mounted read-write into
+# the sandbox, so a key under it would be readable by the agent — which could then
+# forge or strip receipts offline, and "the key never enters the VM" would be a
+# lie. The daemon reads the key host-side; nothing in the VM needs it. (The receipt
+# DB stays under $WORKSPACE on purpose: the checkpoint-anchor demo relies on the
+# agent being able to tamper with the store.)
+KEY_DIR=/tmp/obsigna-keys
+KEY_PATH="$KEY_DIR/signing.key"
+# Forensic X25519 keypair for parameter disclosure (ADR-0012). The daemon needs
+# only the PUBLIC key (to HPKE-encrypt tool parameters into the receipt's
+# parameters_disclosure); the PRIVATE key is held by the operator to decrypt
+# later via `obsigna receipt disclose`. Both live OUTSIDE $WORKSPACE: $WORKSPACE
+# is bind-mounted read-write into the sandbox, so a forensic private key under it
+# would be readable by the agent — it could decrypt its own disclosed parameters
+# and the boundary would be a lie (same reason the checkpoint anchor sits outside
+# the mount).
+FORENSIC_DIR=/tmp/obsigna-forensic
+FORENSIC_KEY_PATH="$FORENSIC_DIR/forensic.key"
+FORENSIC_PUBKEY_PATH="$FORENSIC_DIR/forensic.key.pub"
 SANDBOX_NAME="obsigna-sbx-demo"
 CHAIN_ID="$(date -u +%Y-%m-%d)"
 
@@ -60,6 +78,10 @@ ob_cleanup() {
   fi
   rm -f "$SOCKET_PATH"
   ob_rm_anchor_dir
+  # The off-mount key dirs ($KEY_DIR, $FORENSIC_DIR) are intentionally NOT removed:
+  # like the signing key always was, they're cached across runs and the printed
+  # "To inspect / To disclose" commands need them after the script exits. The DB
+  # they pair with persists too (it's reset at the next run's start, not here).
   return 0
 }
 trap ob_cleanup EXIT
@@ -96,16 +118,43 @@ EOF
 # socket stays within macOS's 103-byte AF_UNIX sun_path limit. Clears .opencode
 # and work so a stale config or plugin from another demo can't leak in (opencode
 # auto-loads plugins from .opencode/plugins/, which would double-count receipts).
-# The cached bin/ and signing key at the workspace root are preserved.
+# The cached bin/ at the workspace root is preserved. (The signing key is not
+# here — it lives off the mount under $KEY_DIR; see ob_ensure_key.)
 ob_reset_workspace() {
   rm -rf "$WORKSPACE/.opencode" "$WORKSPACE/work"
+  # Scrub any signing key left in the mount by an older version of this lib (the
+  # key now lives off-mount under $KEY_DIR). Without this, an upgrade would leave
+  # a forgeable key sitting in the agent-readable workspace.
+  rm -f "$WORKSPACE/signing.key" "$WORKSPACE/signing.key.pub"
   mkdir -p "$WORKSPACE/.opencode" "$WORKSPACE/work"
 }
 
 ob_ensure_key() {
-  if [ ! -f "$KEY_PATH" ]; then
+  if [ ! -f "$KEY_PATH" ] || [ ! -f "${KEY_PATH}.pub" ]; then
     echo "${BLUE}==> Generating signing key...${NC}"
+    mkdir -p "$KEY_DIR"
+    # keys generate won't overwrite an existing key; clear a half-written pair so
+    # a missing .pub (which `obsigna verify` needs) self-heals.
+    rm -f "$KEY_PATH" "${KEY_PATH}.pub"
     obsigna keys generate --key "$KEY_PATH"
+  fi
+}
+
+# ob_ensure_forensic_key — generate the X25519 forensic keypair (ADR-0012) used
+# for parameter disclosure, if it doesn't already exist. Called from
+# ob_start_daemon so every sbx example gets disclosure with no per-demo wiring.
+ob_ensure_forensic_key() {
+  if [ ! -f "$FORENSIC_KEY_PATH" ] || [ ! -f "$FORENSIC_PUBKEY_PATH" ]; then
+    echo "${BLUE}==> Generating forensic key (parameter disclosure)...${NC}"
+    # --init-forensic-key refuses to overwrite EITHER output, so a half-written
+    # pair from an interrupted run (private present, public missing, or vice
+    # versa) would make it error and the daemon would then fail to start on the
+    # missing public key. Clear any partial pair first so generation is atomic.
+    rm -rf "$FORENSIC_DIR"
+    mkdir -p "$FORENSIC_DIR"
+    obsigna-daemon --init-forensic-key \
+      --forensic-key "$FORENSIC_KEY_PATH" \
+      --forensic-public-key "$FORENSIC_PUBKEY_PATH" >/dev/null
   fi
 }
 
@@ -123,9 +172,19 @@ ob_ensure_key() {
 #   OB_ANCHOR_DIR          host dir for the sink; reset on start, removed on cleanup.
 ob_start_daemon() {
   rm -f "$SOCKET_PATH" "$DB_PATH"
+  ob_ensure_forensic_key
   echo "${BLUE}==> Starting obsigna-daemon on host (outside the VM)...${NC}"
   # Build the arg list as a (never-empty) array so adding the optional
   # checkpoint flags stays safe under `set -u` even on macOS's bash 3.2.
+  #
+  # Parameter disclosure (ADR-0012) is on for every sbx example: the daemon
+  # HPKE-encrypts each tool call's parameters to the forensic PUBLIC key and
+  # stores the envelope in the receipt's parameters_disclosure. The signed
+  # receipt still carries only the parameter HASH for integrity; the cleartext
+  # is recoverable solely by the forensic PRIVATE-key holder (see
+  # ob_show_results' `obsigna receipt disclose`). --forensic-public-key is
+  # required for disclosure to take effect — without it --parameter-disclosure
+  # is inert (and the daemon refuses to start if the path is missing).
   local args=(
     --socket "$SOCKET_PATH"
     --db "$DB_PATH"
@@ -133,6 +192,8 @@ ob_start_daemon() {
     --issuer-id "did:user:${USER}@local"
     --chain-id "$CHAIN_ID"
     --unsafe-socket-path
+    --forensic-public-key "$FORENSIC_PUBKEY_PATH"
+    --parameter-disclosure true
   )
   if [ -n "${OB_CHECKPOINT_ANCHOR:-}" ]; then
     ob_rm_anchor_dir
@@ -222,6 +283,74 @@ ob_show_results() {
   obsigna verify --db "$DB_PATH" --public-key "${KEY_PATH}.pub" --chain-id "$CHAIN_ID"
 
   echo
+  echo "${BOLD}══════════════════════════════════════════════════════════════${NC}"
+  echo "${GREEN}${BOLD}  obsigna receipt disclose — forensic recovery of parameters${NC}"
+  echo "${BOLD}══════════════════════════════════════════════════════════════${NC}"
+  echo "The signed receipt carries only a parameter HASH. The cleartext is HPKE-"
+  echo "encrypted (ADR-0012) and recoverable solely with the forensic private key,"
+  echo "which lives on the host outside the sandbox mount — so the actual file"
+  echo "contents written and shell commands run are recoverable, not just hashes:"
+  ob_disclose_all
+
+  echo
   echo "${GREEN}${BOLD}Done.${NC} Receipts stored at: $DB_PATH"
-  echo "To inspect: obsigna receipt show 1 --db $DB_PATH --chain-id $CHAIN_ID"
+  echo "To inspect:  obsigna receipt show 1 --db $DB_PATH --chain-id $CHAIN_ID"
+  echo "To disclose: obsigna receipt disclose 1 --db $DB_PATH --chain-id $CHAIN_ID --key $FORENSIC_KEY_PATH"
+}
+
+# ob_disclose_all — decrypt and print the parameters of every receipt that
+# carries a disclosure envelope. Not every receipt type has one (lifecycle
+# markers don't), so scan from seq 1 and print each success; for `bash` receipts
+# this reveals the exact command string that ran, not just its hash. Honest
+# sentinel if none disclosed.
+ob_disclose_all() {
+  # Walk receipts from seq 1. A receipt that exists but carries no envelope exits
+  # 0 with empty stdout; a nonexistent seq ends the chain cleanly with a "no
+  # receipt at sequence N" stderr note. Any OTHER non-zero exit (e.g. an
+  # unreadable forensic private key) is a real failure we surface — never report
+  # it as "nothing to disclose". Byte-identical disclosures (e.g. repeated todo
+  # snapshots) are collapsed so distinct actions stay readable.
+  local seq=1 out rc found=0 errored=0 dups=0
+  # Explicit trailing-X template (portable across GNU/BSD) under the demo's
+  # /tmp/obsigna-* prefix, so the temp file is recognizable and matches the
+  # cleanup conventions used elsewhere here.
+  local errfile; errfile="$(mktemp /tmp/obsigna-disclose.XXXXXX)"
+  local -a shown=()
+  while :; do
+    # Keep the disclose in an `if` condition: a command substitution that exits
+    # non-zero in a plain assignment would abort the demo under `set -e` (which
+    # mcp-proxy/opencode-plugin use). The condition form is exempt, so we capture
+    # the real exit status instead of dying at end-of-chain.
+    if out="$(obsigna receipt disclose "$seq" --db "$DB_PATH" --chain-id "$CHAIN_ID" --key "$FORENSIC_KEY_PATH" 2>"$errfile")"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    if [ "$rc" -ne 0 ]; then
+      if ! grep -q "no receipt at sequence" "$errfile"; then
+        errored=1
+        echo "${YELLOW}  disclosure failed: $(cat "$errfile")${NC}"
+      fi
+      break
+    fi
+    if [ -n "$out" ]; then
+      local dup=0 s
+      if [ "${#shown[@]}" -gt 0 ]; then
+        for s in "${shown[@]}"; do [ "$s" = "$out" ] && { dup=1; break; }; done
+      fi
+      if [ "$dup" -eq 1 ]; then
+        dups=$((dups + 1))
+      else
+        shown+=("$out")
+        found=1
+        echo "${BOLD}  receipt #$seq parameters:${NC}"
+        while IFS= read -r line; do echo "    $line"; done <<< "$out"
+      fi
+    fi
+    seq=$((seq + 1))
+  done
+  rm -f "$errfile"
+  [ "$dups" -gt 0 ] && echo "${YELLOW}  (+$dups later receipt(s) disclosed identical parameters)${NC}"
+  { [ "$found" -eq 0 ] && [ "$errored" -eq 0 ]; } && echo "${YELLOW}  (no receipt carried a disclosure envelope)${NC}"
+  return 0
 }
