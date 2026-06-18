@@ -67,8 +67,8 @@ ob_rm_anchor_dir() {
 }
 
 ob_cleanup() {
-  [ -n "$SOCAT_PID" ] && kill "$SOCAT_PID" 2>/dev/null || true
-  [ -n "$DAEMON_PID" ] && kill "$DAEMON_PID" 2>/dev/null || true
+  if [ -n "$SOCAT_PID" ]; then kill "$SOCAT_PID" 2>/dev/null || true; fi
+  if [ -n "$DAEMON_PID" ]; then kill "$DAEMON_PID" 2>/dev/null || true; fi
   sbx rm -f "$SANDBOX_NAME" 2>/dev/null || true
   if [ "${#OB_SANDBOXES[@]}" -gt 0 ]; then
     local _sb

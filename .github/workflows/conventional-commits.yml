@@ -1,0 +1,27 @@
+name: "CI: conventional commits"
+
+# Hard gate: the PR title must follow Conventional Commits. This repo
+# squash-merges, so the PR title — not the individual commits — becomes the
+# commit message on main. That's what we lint here.
+#
+# The local lefthook commit-msg hook (see CONTRIBUTING.md) still lints each
+# commit as you write it, but only if you ran `lefthook install`; this job is
+# the authoritative gate on what actually lands.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      # amannn/action-semantic-pull-request@v6.1.1, pinned by commit SHA.
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

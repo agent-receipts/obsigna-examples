@@ -1,0 +1,22 @@
+# Lefthook — local pre-commit and commit-msg hooks
+# Install: brew install lefthook && lefthook install
+# Docs: https://lefthook.dev/configuration/
+#
+# This mirrors the CI gates (.github/workflows/) so failures surface locally
+# before you push, not on the PR.
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: shellcheck
+      glob: "*.sh"
+      # Skip only when shellcheck is absent; when present, let its exit code
+      # propagate so real lint failures aren't masked as "not installed".
+      run: if command -v shellcheck >/dev/null 2>&1; then shellcheck {staged_files}; else echo "shellcheck not installed — skipping (CI will still check)"; fi
+
+commit-msg:
+  commands:
+    # convco is a hard requirement (documented in CONTRIBUTING.md) — fail fast
+    # with an actionable message instead of soft-skipping like shellcheck.
+    conventional-commit:
+      run: command -v convco >/dev/null 2>&1 || { echo "convco not found — install via 'brew install convco' or 'cargo install convco' (see CONTRIBUTING.md#commit-messages)"; exit 1; } && convco check --from-stdin < "{1}"
