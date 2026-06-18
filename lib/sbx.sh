@@ -20,7 +20,14 @@ SOCKET_PATH="$WORKSPACE/obsigna.sock"
 TCP_PORT=3923
 CONTAINER_SOCKET=/tmp/obsigna.sock
 DB_PATH="$WORKSPACE/receipts.db"
-KEY_PATH="$WORKSPACE/signing.key"
+# Signing key lives OUTSIDE $WORKSPACE. $WORKSPACE is bind-mounted read-write into
+# the sandbox, so a key under it would be readable by the agent — which could then
+# forge or strip receipts offline, and "the key never enters the VM" would be a
+# lie. The daemon reads the key host-side; nothing in the VM needs it. (The receipt
+# DB stays under $WORKSPACE on purpose: the checkpoint-anchor demo relies on the
+# agent being able to tamper with the store.)
+KEY_DIR=/tmp/obsigna-keys
+KEY_PATH="$KEY_DIR/signing.key"
 SANDBOX_NAME="obsigna-sbx-demo"
 CHAIN_ID="$(date -u +%Y-%m-%d)"
 
@@ -96,15 +103,24 @@ EOF
 # socket stays within macOS's 103-byte AF_UNIX sun_path limit. Clears .opencode
 # and work so a stale config or plugin from another demo can't leak in (opencode
 # auto-loads plugins from .opencode/plugins/, which would double-count receipts).
-# The cached bin/ and signing key at the workspace root are preserved.
+# The cached bin/ at the workspace root is preserved. (The signing key is not
+# here — it lives off the mount under $KEY_DIR; see ob_ensure_key.)
 ob_reset_workspace() {
   rm -rf "$WORKSPACE/.opencode" "$WORKSPACE/work"
+  # Scrub any signing key left in the mount by an older version of this lib (the
+  # key now lives off-mount under $KEY_DIR). Without this, an upgrade would leave
+  # a forgeable key sitting in the agent-readable workspace.
+  rm -f "$WORKSPACE/signing.key" "$WORKSPACE/signing.key.pub"
   mkdir -p "$WORKSPACE/.opencode" "$WORKSPACE/work"
 }
 
 ob_ensure_key() {
-  if [ ! -f "$KEY_PATH" ]; then
+  if [ ! -f "$KEY_PATH" ] || [ ! -f "${KEY_PATH}.pub" ]; then
     echo "${BLUE}==> Generating signing key...${NC}"
+    mkdir -p "$KEY_DIR"
+    # keys generate won't overwrite an existing key; clear a half-written pair so
+    # a missing .pub (which `obsigna verify` needs) self-heals.
+    rm -f "$KEY_PATH" "${KEY_PATH}.pub"
     obsigna keys generate --key "$KEY_PATH"
   fi
 }
