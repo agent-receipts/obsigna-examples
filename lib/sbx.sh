@@ -311,7 +311,10 @@ ob_disclose_all() {
   # it as "nothing to disclose". Byte-identical disclosures (e.g. repeated todo
   # snapshots) are collapsed so distinct actions stay readable.
   local seq=1 out rc found=0 errored=0 dups=0
-  local errfile; errfile="$(mktemp)"
+  # Explicit trailing-X template (portable across GNU/BSD) under the demo's
+  # /tmp/obsigna-* prefix, so the temp file is recognizable and matches the
+  # cleanup conventions used elsewhere here.
+  local errfile; errfile="$(mktemp /tmp/obsigna-disclose.XXXXXX)"
   local -a shown=()
   while :; do
     # Keep the disclose in an `if` condition: a command substitution that exits
