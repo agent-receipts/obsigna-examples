@@ -143,6 +143,13 @@ ob_ensure_key() {
 # ob_ensure_forensic_key — generate the X25519 forensic keypair (ADR-0012) used
 # for parameter disclosure, if it doesn't already exist. Called from
 # ob_start_daemon so every sbx example gets disclosure with no per-demo wiring.
+#
+# On a normal host, `obsigna-daemon --init` now bundles this — it generates the
+# forensic keypair and writes a disclosure-on config in one step. We deliberately
+# use the standalone `--init-forensic-key` here instead, because --init writes the
+# private key to the default local path; in the sandbox the private key must live
+# OUTSIDE $WORKSPACE (see FORENSIC_DIR above) so the agent cannot decrypt its own
+# disclosed parameters.
 ob_ensure_forensic_key() {
   if [ ! -f "$FORENSIC_KEY_PATH" ] || [ ! -f "$FORENSIC_PUBKEY_PATH" ]; then
     echo "${BLUE}==> Generating forensic key (parameter disclosure)...${NC}"
