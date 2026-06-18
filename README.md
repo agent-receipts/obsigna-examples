@@ -54,6 +54,8 @@ your laptop (host)
 
 The signing daemon runs on the **host** — the key never enters the VM. Receipts are signed and stored on the host, so even a fully compromised agent can't forge or delete the chain. The socat tunnel exists because, on macOS, a host Unix socket is visible inside a Linux container via bind-mount but not connectable (the kernels differ); bridging through TCP keeps the daemon — and the key — on the host.
 
+Every example also enables **parameter disclosure** (ADR-0012): the daemon HPKE-encrypts each tool call's parameters to a forensic *public* key and stores the envelope in the receipt's `parameters_disclosure`. The signed receipt still carries only the parameter hash, so chain integrity never depends on the plaintext — but an operator holding the forensic *private* key can later recover the exact file contents written and commands run via `obsigna receipt disclose`. That private key lives on the host **outside** the bind-mounted workspace, so the agent can never decrypt its own disclosed parameters. The demos that use the shared result display print the disclosed parameters at the end.
+
 All of this host-side plumbing lives in [`lib/sbx.sh`](./lib/sbx.sh), so an sbx example's `demo.sh` is just: its config, its agent task, and the calls into that library.
 
 ## Prerequisites (sbx examples)

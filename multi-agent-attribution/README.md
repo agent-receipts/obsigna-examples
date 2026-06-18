@@ -76,9 +76,13 @@ The default `obsigna receipt list` text view shows sequence, time, and tool but
   deterministic — two local models contending live on one host would just thrash.
   The daemon assigns chain sequence regardless of timing, so the interleaving and
   attribution hold the same way under real concurrency.
-- Receipts record *who* and *what* (operator, tool, ordered, signed), not the new
-  file contents — parameters are hashed before signing. The chain proves who
-  touched the shared file without leaking its contents.
+- Receipts record *who* and *what* (operator, tool, ordered, signed). The signed
+  body carries only a parameter *hash*, so the chain proves who touched the shared
+  file without putting its contents in the signed receipt. With parameter
+  disclosure on (ADR-0012, enabled for every example here), the cleartext is
+  additionally HPKE-encrypted into a `parameters_disclosure` envelope that only the
+  holder of the forensic private key can open — see the
+  `obsigna receipt disclose` output the demo prints.
 - Small local models sometimes guess a wrong parameter name (`filePath` before
   `path`), producing a failure receipt followed by a corrected success receipt —
   an honest trail of what the agent attempted.

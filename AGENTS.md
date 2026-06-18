@@ -34,6 +34,13 @@ create the sandbox, run the agent via `sbx exec`, then show results. See the
   host *outside* `$WORKSPACE`. An anchor under the mount is writable by the agent
   and the boundary becomes a lie. (See `checkpoint-anchor/` for the pattern:
   `OB_ANCHOR_DIR=/tmp/obsigna-anchor`, a sibling path.)
+- **The forensic private key for parameter disclosure lives outside `$WORKSPACE`
+  too.** Every sbx example enables disclosure (ADR-0012): `ob_start_daemon` passes
+  `--forensic-public-key` so the daemon HPKE-encrypts tool parameters into the
+  receipt, and `ob_show_results` recovers them with `obsigna receipt disclose`. The
+  daemon needs only the *public* key; the *private* key (`$FORENSIC_DIR`,
+  `/tmp/obsigna-forensic`) must stay off the mount, or the agent could decrypt its
+  own disclosed parameters and the boundary would be a lie.
 - **Don't claim a boundary you haven't demonstrated.** If a demo asserts the
   agent can't do X, have the sandbox *try* X and gate the verdict on the real
   result — never on a check that cannot fail.
